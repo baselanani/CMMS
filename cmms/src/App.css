@@ -1,0 +1,182 @@
+body{
+	font-size:1.18rem;
+	background-color: #fff;
+	font-weight: bold
+
+}
+textarea{
+	resize: none
+}
+input, button{
+	padding: 10px 15px;
+	background-color: #fefefe;
+	border-radius: 5px
+}
+input:focus, textarea:focus{
+	outline: #35bb10 solid 2px
+}
+div{
+	
+}
+
+.border-2{
+	border: 4px solid #f2f2f2;
+}
+.border-top-with-padding{
+	border-top: 5px solid darkgrey;
+	padding-top: 20px;
+}
+
+.padding-left-right-15{
+	padding-left: 15px;
+	padding-right: 15px;
+}
+.padding-bottom-15{
+	padding-bottom: 15px;
+}
+.margin-20{
+	margin: 20px 20px
+}
+.margin-10{
+	margin: 0px 25px
+}
+.flex-row{
+	display:flex;
+}
+.flex-col{
+	display:flex;
+	flex-direction: column
+}
+.hidden{
+	display: none
+}
+.flex-wrap{
+	flex-wrap: wrap
+}
+
+.flex-center{
+	justify-content:center;
+	align-items: center
+}
+.flex-grow{
+	flex-grow: 1
+}
+.span-4{
+	flex-basis:90%
+}
+
+.span-1{
+	flex-basis:10%
+}
+.span-2{flex-basis:2%}
+
+.gap-20{
+	gap:20px
+}
+.gap-25{
+	gap:25px
+}
+.gap-50{
+	gap:50px
+}
+
+.justify-between{
+	justify-content: space-between
+}
+.justify-center{
+	justify-content: center
+}
+.align-baseline{
+	align-items: baseline
+}
+.align-center{
+	align-items: center
+}
+.inherit{
+	font-size: inherit
+}
+label{
+	width: 100%
+}
+.work-request-input{
+	width: 100%;
+}
+.btn-layout{
+	background-color: #505050;
+	color:white;
+	border-radius: 5px;
+	padding: 10px 15px;
+	width: 70%
+}
+.submit-btn{
+	background-color: #008800;
+	color: white;
+	cursor: pointer;
+	width: 70%;
+	font-size: 1.18rem
+}
+.work-request-form{
+	border: 2px solid;
+	border-radius: 5px;
+	padding: 50px;
+	gap: 8px;
+	background-color: white;
+	height: fit-content
+}
+.login-input{
+	width:400px
+}
+.login-button{
+	width:200px;
+	border: 2px solid #a1a1a1;
+}
+.login{
+	background-color: #f2f2f2;
+	height: 100vh
+}
+.top-menu-button{
+	justify-self: flex-end
+}
+
+.main-view{
+	background-color: #f1f1f1;	
+}
+.button1{
+	margin:7px 10px;
+	padding: 7px 10px;
+	background-color: #fdfdfd;
+	border: 4px solid #f2f2f2;
+	width: 19vw;
+	height: calc(19vw - 10vw);
+	box-shadow: 0px 8px 10px lightslategrey;
+	border-radius: 8px;
+	
+}
+.dash-section{
+	background-color: #fefefe;
+	border-radius: 4px;
+	border: 3px solid #e3e4e5;
+}
+.location-name{
+	width: 152px;
+	color: #333131;
+	margin-bottom: 10px;
+	cursor: pointer;
+	background-color: lightgrey;
+}
+
+.location > div{
+	cursor: pointer;
+	padding: 10px 10px;
+	
+}
+
+.location > div:hover{
+	background-color: lightgrey
+	
+}
+#locations{
+	width:100%;
+	padding-left: 15px;
+	padding-right: 15px;
+}
