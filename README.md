@@ -2,7 +2,7 @@ Note: This project is Incomplete.
 
 This is a Computerized Maintenance Management System (CMMS) project. The project is structured with a separated client and server architecture. However, at this stage, the client and server are not fully integrated yet.
 
-Project Structure
+Project Structure:
 
   Client (cmms folder): The frontend is built using React.js. Currently, the client is using mock data and does not yet make real API calls to the server. It is primarily focused on the UI and rendering the data, but it doesn't interact with the backend at this stage.
   
