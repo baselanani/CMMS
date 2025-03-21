@@ -57,9 +57,10 @@ function query(q, vArr=[]){
 		});
 	});
 }
+const salt='1743075e-f075-45fb-8826-f38ae4a1242a';
 function encr(p){
 	return new Promise( (res, rej)=>{
-		crypto.scrypt(p, "#"+p[0]+"p0257"+p[0]+"@"+p[0], 32, {N:16384}, (err, hash)=>{
+		crypto.scrypt(p, salt+"#"+p[0]+"p0257"+p[0]+"@"+p[0], 32, {N:16384}, (err, hash)=>{
 			res(hash.toString('hex'));
 		});
 	}
@@ -241,7 +242,7 @@ teams.get("/page/:n", pagination, async (req, res)=>{
 	let results = await query("SELECT id, name FROM teams WHERE loc_id = ? ORDER BY ?? LIMIT ?,25", [req.query.loc_id, req.query.sort, req.params.n]);
 	results==undefined?res.send("error"):res.json(results);
 });
-teams.post("/add", async (req, res)=>{
+teams.post("/", async (req, res)=>{
 	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_create_teams)){
 		res.send("nop");
 		return;
@@ -250,24 +251,24 @@ teams.post("/add", async (req, res)=>{
 	results==undefined?res.send("error"):res.send("done");
 });
 //edit = {name: "new name", location:"new location"}
-teams.put("/edit", validateEdit, async (req, res)=>{
+teams.put("/:id", validateEdit, async (req, res)=>{
 	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_edit_teams)){
 		res.send("nop");
 		return;
 	}
-	let results = await query("UPDATE teams SET ? WHERE id=?", [req.body.edit, req.body.id]);
+	let results = await query("UPDATE teams SET ? WHERE id=?", [req.body.edit, req.params.id]);
 	results==undefined?res.send("error"):res.send("done");
 });
-teams.delete("/del", (req, res)=>{
+teams.delete("/:id", (req, res)=>{
 	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_del_teams)){
 		res.send("nop");
 		return;
 	}
-	if(req.query.id == undefined){
+	if(req.params.id == undefined){
 		req.client.destroy();
 		return;
 	}
-	con.query(sql.format("DELETE FROM teams WHERE id=?"), [req.query.id], (err, results)=>{
+	con.query(sql.format("DELETE FROM teams WHERE id=?"), [req.params.id], (err, results)=>{
 					if(err){
 						res.send("error");
 						return;
@@ -293,7 +294,7 @@ locations.get("/", (req, res)=>{
 					res.json(results);
 	});
 });
-locations.post("/add", (req, res)=>{
+locations.post("/", (req, res)=>{
 	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_add_locations)){
 		res.send("nop");
 		return;
@@ -305,24 +306,24 @@ locations.post("/add", (req, res)=>{
 			res.send("done");
 	});
 });
-locations.put("/edit", validateEdit, async (req, res)=>{
+locations.put("/:id", validateEdit, async (req, res)=>{
 	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_edit_locations)){
 		res.send("nop");
 		return;
 	}
-	let results = await query("UPDATE locations SET ? WHERE id=?", [req.body.edit, req.body.id]);
+	let results = await query("UPDATE locations SET ? WHERE id=?", [req.body.edit, req.params.id]);
 	results==undefined?res.send("error"):res.json(results);
 });
-locations.delete("/del", (req, res)=>{
+locations.delete("/:id", (req, res)=>{
 	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_del_locations)){
 		res.send("nop");
 		return;
 	}
-	if(req.query.id == undefined){
+	if(req.params.id == undefined){
 		req.client.destroy();
 		return;
 	}
-	con.query(sql.format("DELETE FROM locations WHERE id=?"), [req.query.id], (err, results)=>{
+	con.query(sql.format("DELETE FROM locations WHERE id=?"), [req.params.id], (err, results)=>{
 					if(err){throw err;}
 					res.send("done");
 	});
@@ -400,15 +401,15 @@ workOrders.get("/:id/parts", async (req,res)=>{
 	}
 });
 
-workOrders.get("/:id/assigned/users", async (req, res)=>{
+workOrders.get("/:id/users", async (req, res)=>{
 	let results = await query("SELECT users.name, users.image FROM work_assigned_users INNER JOIN users ON(work_id = ? AND users.id = user_id)", [req.params.id]);
 	res.send(results);
 });
-workOrders.get("/:id/assigned/teams", async (req, res)=>{
+workOrders.get("/:id/teams", async (req, res)=>{
 	let results = await query("SELECT teams.name, teams.location FROM work_assigned_teams INNER JOIN teams ON(work_id = ? AND teams.id = team_id)", [req.params.id]);
 	res.send(results);
 });
-workOrders.post("/add", (req, res)=>{
+workOrders.post("/", (req, res)=>{
 	if(req.body.loc_id == undefined){
 		req.client.destroy();
 		return;
@@ -421,16 +422,16 @@ workOrders.post("/add", (req, res)=>{
 	
 });
 
-workOrders.put("/edit", (req, res)=>{
-	let q = sql.format("UPDATE work_orders SET ? WHERE id=?", [req.body.edit, req.body.id]);
+workOrders.put("/:id", (req, res)=>{
+	let q = sql.format("UPDATE work_orders SET ? WHERE id=?", [req.body.edit, req.params.id]);
 	con.query(q, (err, result)=>{
 		if(err){throw err;}
 		res.send("done");
 	});
 });
 
-workOrders.delete("/del", (req, res)=>{
-	con.query("DELETE FROM work_orders WHERE id=?", [req.query.id], (err, result)=>{
+workOrders.delete("/:id", (req, res)=>{
+	con.query("DELETE FROM work_orders WHERE id=?", [req.params.id], (err, result)=>{
 		if(err){throw err}
 		console.log("asset was deleted!");
 		res.send("done");
@@ -479,7 +480,7 @@ assets.get("/:id", async (req,res)=>{
 	let results = await query("SELECT * FROM assets WHERE id = ?", [req.params.id]);
 	res.send(results);
 });
-assets.post("/add", (req, res)=>{
+assets.post("/", (req, res)=>{
 	con.query("INSERT INTO assets(name, loc_id) VALUES(?, ?)", [req.body.name, req.body.loc_id], (err, result)=>{
 		if(err){throw err;}
 		console.log("Successfully added a new asset!");
@@ -488,20 +489,20 @@ assets.post("/add", (req, res)=>{
 	
 });
 //newField = {field: "user manual", field_name:"", field_type: "string"};
-assets.post("/add_field", async (req, res)=>{
+assets.post("/field", async (req, res)=>{
 	await query("INSERT INTO custom_assets_fields SET ?", [req.body.newField]);
 	res.send("done");
 });
-assets.put("/edit", validateEdit,(req, res)=>{
-	let q = sql.format("UPDATE assets SET ? WHERE id=?", [req.body.edit, req.body.id]);
+assets.put("/:id", validateEdit,(req, res)=>{
+	let q = sql.format("UPDATE assets SET ? WHERE id=?", [req.body.edit, req.params.id]);
 	con.query(q, (err, result)=>{
 		if(err){throw err;}
 		res.send("done");
 	});
 });
 
-assets.delete("/del", (req, res)=>{
-	con.query("DELETE FROM assets WHERE id=?", [req.query.id], (err, result)=>{
+assets.delete("/:id", (req, res)=>{
+	con.query("DELETE FROM assets WHERE id=?", [req.params.id], (err, result)=>{
 		if(err){throw err}
 		console.log("asset was deleted!");
 		res.send("done");
@@ -550,7 +551,7 @@ parts.get("/:id", async (req,res)=>{
 	let results = await query("SELECT * FROM parts WHERE id = ?", [req.params.id]);
 	res.send(results);
 });
-parts.post("/add", (req, res)=>{
+parts.post("/", (req, res)=>{
 	con.query("INSERT INTO parts(name, loc_id) VALUES(?, ?)", [req.body.name, req.body.loc_id], (err, result)=>{
 		if(err){throw err;}
 		console.log("Successfully added a new asset!");
@@ -558,22 +559,22 @@ parts.post("/add", (req, res)=>{
 	});
 	
 });
-// /parts/add_field, newField = {field: "user manual", field_name:"", field_type: "string"};
-parts.post("/add_field", async (req, res)=>{
+// /parts/field, newField = {field: "user manual", field_name:"", field_type: "string"};
+parts.post("/field", async (req, res)=>{
 	await query("INSERT INTO custom_parts_fields SET ?", [req.body.newField]);
 	res.send("done");
 });
 
-parts.put("/edit", validateEdit, (req, res)=>{
-	let q = sql.format("UPDATE parts SET ? WHERE id=?", [req.body.edit, req.body.id]);
+parts.put("/:id", validateEdit, (req, res)=>{
+	let q = sql.format("UPDATE parts SET ? WHERE id=?", [req.body.edit, req.params.id]);
 	con.query(q, (err, result)=>{
 		if(err){throw err;}
 		res.send("done");
 	});
 });
 
-parts.delete("/del", (req, res)=>{
-	con.query("DELETE FROM parts WHERE id=?", [req.query.id], (err, result)=>{
+parts.delete("/:id", (req, res)=>{
+	con.query("DELETE FROM parts WHERE id=?", [req.params.id], (err, result)=>{
 		if(err){throw err}
 		console.log("parts was deleted!");
 		res.send("done");
