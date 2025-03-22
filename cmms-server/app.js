@@ -417,7 +417,6 @@ workOrders.post("/", (req, res)=>{
 	}
 	con.query("INSERT INTO work_orders(name, loc_id) VALUES(?, ?)", [req.body.name, req.body.loc_id], (err, result)=>{
 		if(err){throw err;}
-		console.log("Successfully added a new asset!");
 		res.send("done");
 	});
 	
@@ -434,7 +433,6 @@ workOrders.put("/:id", (req, res)=>{
 workOrders.delete("/:id", (req, res)=>{
 	con.query("DELETE FROM work_orders WHERE id=?", [req.params.id], (err, result)=>{
 		if(err){throw err}
-		console.log("asset was deleted!");
 		res.send("done");
 	});
 });
@@ -506,7 +504,7 @@ assets.put("/:id", validateEdit,(req, res)=>{
 assets.delete("/:id", (req, res)=>{
 	con.query("DELETE FROM assets WHERE id=?", [req.params.id], (err, result)=>{
 		if(err){throw err}
-		console.log("asset was deleted!");
+		console.log("an asset was deleted!");
 		res.send("done");
 	});
 });
@@ -557,7 +555,7 @@ parts.get("/:id", async (req,res)=>{
 parts.post("/", (req, res)=>{
 	con.query("INSERT INTO parts(name, loc_id) VALUES(?, ?)", [req.body.name, req.body.loc_id], (err, result)=>{
 		if(err){throw err;}
-		console.log("Successfully added a new asset!");
+		console.log("Successfully added a new part!");
 		res.send("done");
 	});
 	
@@ -579,7 +577,7 @@ parts.put("/:id", validateEdit, (req, res)=>{
 parts.delete("/:id", (req, res)=>{
 	con.query("DELETE FROM parts WHERE id=?", [req.params.id], (err, result)=>{
 		if(err){throw err}
-		console.log("parts was deleted!");
+		console.log("a part was deleted!");
 		res.send("done");
 	});
 });
