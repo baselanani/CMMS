@@ -57,7 +57,7 @@ function query(q, vArr=[]){
 		});
 	});
 }
-const salt='1743075e-f075-45fb-8826-f38ae4a1242a';
+const salt = process.env.SCRYPT_SALT;
 function encr(p){
 	return new Promise( (res, rej)=>{
 		crypto.scrypt(p, salt+"#"+p[0]+"p0257"+p[0]+"@"+p[0], 32, {N:16384}, (err, hash)=>{
