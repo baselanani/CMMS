@@ -238,7 +238,7 @@ users.post("/login", async (req, res)=>{
 teams.use(authenticate);
 
 teams.get("/page/:n", pagination, async (req, res)=>{
-	const offset = (req.params.n-1)*25;
+	const offset = req.params.n;
 	let results = await query("SELECT id, name FROM teams WHERE loc_id = ? ORDER BY ?? LIMIT ?,25", [req.query.loc_id, req.query.sort, offset]);
 	results==undefined?res.send("error"):res.json(results);
 });
@@ -343,7 +343,7 @@ workOrders.get("/page/:n", pagination, (req,res)=>{
 		return;
 	}
 	let q;
-	const offset = (req.params.n-1)*25;
+	const offset = req.params.n;
 	if(req.query.desc == "1"){
 		q = sql.format("SELECT * FROM work_orders WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
@@ -464,7 +464,7 @@ assets.use((req, res, next)=>{
 
 assets.get("/page/:n", pagination, (req,res)=>{
 	let q;
-	const offset = (req.params.n-1)*25;
+	const offset = req.params.n;
 	if(req.query.desc == "1"){
 		q = sql.format("SELECT * FROM assets WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
@@ -536,7 +536,7 @@ parts.use((req, res, next)=>{
 
 parts.get("/page/:n", pagination, (req,res)=>{
 	let q;
-	const offset = (req.params.n-1)*25;
+	const offset = req.params.n;
 	if(req.query.desc == "1"){
 		q = sql.format("SELECT * FROM parts WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
