@@ -224,8 +224,8 @@ app.use("/assets", assets);
 app.use("/parts", parts);
 
 //DATABASE ENTITY TYPES
-const ASSET_ID = 1;
-const PART_ID = 2;
+const ASSET_TYPE = 1;
+const PART_TYPE = 2;
 
 
 
