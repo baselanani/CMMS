@@ -70,18 +70,14 @@ function encr(p){
 function genId() {
     return new Promise((resolve, rej) => {
         let result = "";
-        for (let i = 0; i < 2; i++) {
-            crypto.randomBytes(16, (err, res) => {
+            crypto.randomBytes(32, (err, res) => {
                 if (err)
                     return;
-                for (let j = 0; j < 16; j++) {
+                for (let j = 0; j < 32; j++) {
                     result += strOfChars[res[j] % strOfChars.length];
                 }
-                if (result.length == 32) {
-                    resolve(result);
-                }
-            });
-        }
+                resolve(result);
+            });   
     });
 }
 function hasPermission(user_perms, perm){
