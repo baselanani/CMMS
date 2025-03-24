@@ -204,6 +204,8 @@ async function startDatabaseInit(){
 	await testData();
 	console.log("done filling the tables with test data");
 }
+//Make sure you have cmms schema created by running the query "CREATE DATABASE cmms;" in MySQL.
+//Then, execute the following line only once, and comment it afterwards.
 startDatabaseInit();
 
 //Middleware
