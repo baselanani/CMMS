@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const sql = require("mysql2");
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
+const Joi = require("joi");
+const jwt = require("jsonwebtoken");
 
 let app = express();
 let users = express.Router();
@@ -96,23 +98,84 @@ async function startDatabaseInit(){
 		//con.query("CREATE DATABASE cmms", (err, res)=>{
 			//if(err){throw err;}
 			let res;
-			res = await query("CREATE TABLE locations (id BIGINT AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY(id))");
-			res = await query("CREATE TABLE work_orders(id BIGINT AUTO_INCREMENT, name VARCHAR(255) NOT NULL, description VARCHAR(10000), image VARCHAR(255) NULL, due_date TIMESTAMP NULL, started_date TIMESTAMP NULL, drafted_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(), completed_date TIMESTAMP NULL, status VARCHAR(255) NULL, priority TINYINT NULL, work_type VARCHAR(50) NULL, PRIMARY KEY(id), loc_id BIGINT NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE assets(id BIGINT AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, make VARCHAR(255) NULL, model VARCHAR(255) NULL, PRIMARY KEY(id), loc_id BIGINT NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE parts(id BIGINT AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, code VARCHAR(255) NULL, price DOUBLE NULL, qty DOUBLE NULL, location VARCHAR(255), PRIMARY KEY(id), loc_id BIGINT NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE teams(id BIGINT AUTO_INCREMENT, name VARCHAR(255) NOT NULL, loc_id BIGINT, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE , PRIMARY KEY(id))");
-			res = await query("CREATE TABLE roles(id BIGINT AUTO_INCREMENT, name VARCHAR(100), PRIMARY KEY(id), permissions INT UNSIGNED)");
-			res = await query("CREATE TABLE users(id BIGINT AUTO_INCREMENT, role_id BIGINT, FOREIGN KEY(role_id) REFERENCES roles(id), username VARCHAR(255) NOT NULL, password CHAR(64) NOT NULL, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, location VARCHAR(255), PRIMARY KEY(id), INDEX(username, password))");
-			res = await query("CREATE TABLE team_users(user_id BIGINT, team_id BIGINT, FOREIGN KEY(team_id) REFERENCES teams(id) , FOREIGN KEY(user_id) REFERENCES users(id))");
-			res = await query("CREATE TABLE work_assigned_users(work_id BIGINT, user_id BIGINT,	FOREIGN KEY(work_id) REFERENCES work_orders(id) ON DELETE CASCADE , FOREIGN KEY(user_id) REFERENCES users(id))");
-			res = await query("CREATE TABLE work_assigned_teams(work_id BIGINT, team_id BIGINT, FOREIGN KEY(work_id) REFERENCES work_orders(id) ON DELETE CASCADE, FOREIGN KEY(team_id) REFERENCES teams(id))");
-			res = await query("CREATE TABLE custom_assets_fields(id BIGINT AUTO_INCREMENT, PRIMARY KEY(id), field_name VARCHAR(255) NOT NULL, field VARCHAR(255) NULL, field_type VARCHAR(255) NOT NULL, asset_id BIGINT, FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE custom_parts_fields(id BIGINT AUTO_INCREMENT, PRIMARY KEY(id), field_name VARCHAR(255) NOT NULL, field VARCHAR(255) NULL, field_type VARCHAR(255) NOT NULL, part_id BIGINT, FOREIGN KEY(part_id) REFERENCES parts(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE work_orders_logs(id BIGINT AUTO_INCREMENT, log VARCHAR(275), time TIMESTAMP, PRIMARY KEY(id), work_id BIGINT, FOREIGN KEY(work_id) REFERENCES work_orders(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE assets_logs(id BIGINT AUTO_INCREMENT, PRIMARY KEY(id), log VARCHAR(275), time TIMESTAMP, asset_id BIGINT, FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE parts_logs(id BIGINT AUTO_INCREMENT, PRIMARY KEY(id), log VARCHAR(275), time TIMESTAMP, part_id BIGINT, FOREIGN KEY(part_id) REFERENCES parts(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE work_orders_assets(id BIGINT AUTO_INCREMENT, PRIMARY KEY(id), work_id BIGINT, FOREIGN KEY(work_id) REFERENCES work_orders(id) ON DELETE CASCADE, asset_id BIGINT, FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE work_orders_parts(id BIGINT AUTO_INCREMENT, PRIMARY KEY(id), work_id BIGINT, FOREIGN KEY(work_id) REFERENCES work_orders(id) ON DELETE CASCADE, part_id BIGINT, FOREIGN KEY(part_id) REFERENCES parts(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE locations (id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY(id))");
+			res = await query("CREATE TABLE work_orders(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, description VARCHAR(10000), image VARCHAR(255) NULL, due_date TIMESTAMP NULL, started_date TIMESTAMP NULL, drafted_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(), completed_date TIMESTAMP NULL, status VARCHAR(255) NULL, priority TINYINT NULL, work_type VARCHAR(50) NULL, PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE assets(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, make VARCHAR(255) NULL, model VARCHAR(255) NULL, PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE parts(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, code VARCHAR(255) NULL, price DOUBLE NULL, qty DOUBLE NULL, location VARCHAR(255), PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE teams(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, loc_id INT UNSIGNED, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE , PRIMARY KEY(id))");
+			res = await query("CREATE TABLE roles(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(100), PRIMARY KEY(id), permissions INT UNSIGNED)");
+			res = await query("CREATE TABLE users(id INT UNSIGNED AUTO_INCREMENT, role_id INT UNSIGNED, FOREIGN KEY(role_id) REFERENCES roles(id), username VARCHAR(255) NOT NULL, password CHAR(64) NOT NULL, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, location VARCHAR(255), PRIMARY KEY(id), INDEX(username, password))");
+			res = await query("CREATE TABLE team_users(user_id INT UNSIGNED, team_id INT UNSIGNED, FOREIGN KEY(team_id) REFERENCES teams(id) , FOREIGN KEY(user_id) REFERENCES users(id))");
+			res = await query("CREATE TABLE work_assigned_users(work_order_id INT UNSIGNED, user_id INT UNSIGNED,	FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE , FOREIGN KEY(user_id) REFERENCES users(id))");
+			res = await query("CREATE TABLE work_assigned_teams(work_order_id INT UNSIGNED, team_id INT UNSIGNED, FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE, FOREIGN KEY(team_id) REFERENCES teams(id))");
+			res = await query("CREATE TABLE work_orders_logs(id INT UNSIGNED AUTO_INCREMENT, action VARCHAR(30), time TIMESTAMP, PRIMARY KEY(id), work_order_id INT UNSIGNED, FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE assets_logs(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), action VARCHAR(30), time TIMESTAMP, asset_id INT UNSIGNED, FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE parts_logs(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), action VARCHAR(30), time TIMESTAMP, part_id INT UNSIGNED, FOREIGN KEY(part_id) REFERENCES parts(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE work_orders_assets(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), work_order_id INT UNSIGNED, FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE, asset_id INT UNSIGNED, FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE work_orders_parts(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), work_order_id INT UNSIGNED, FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE, part_id INT UNSIGNED, FOREIGN KEY(part_id) REFERENCES parts(id) ON DELETE CASCADE)");
+			
+			res = await query("CREATE TABLE custom_fields(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL)");
+			res = await query("CREATE TABLE entity_custom_fields(entity_id INT UNSIGNED, entity_type TINYINT, custom_field_id INT UNSIGNED, value TEXT NULL, PRIMARY KEY(entity_id, entity_type, custom_field_id), FOREIGN KEY(custom_field_id) REFERENCES custom_fields(id) ON DELETE CASCADE)");
+			
+			res = await query(`
+					CREATE TRIGGER work_order_insert AFTER INSERT ON work_orders FOR EACH ROW
+					BEGIN
+					   INSERT INTO work_orders_logs(action, time, work_order_id) VALUES('INSERT',CURRENT_TIMESTAMP, NEW.id); 
+					END ;
+				   `);
+			res = await query(`
+					CREATE TRIGGER work_order_update AFTER UPDATE ON work_orders FOR EACH ROW
+					BEGIN
+					   INSERT INTO work_orders_logs(action, time, work_order_id) VALUES('UPDATE',CURRENT_TIMESTAMP, NEW.id);
+					END ;
+				   `);
+			res = await query(`
+					CREATE TRIGGER work_order_delete AFTER DELETE ON work_orders FOR EACH ROW
+					BEGIN
+					   INSERT INTO work_orders_logs(action, time, work_order_id) VALUES('DELETE',CURRENT_TIMESTAMP, OLD.id); 
+					END ;
+				   `);
+			///////////////////////
+			res = await query(`
+					CREATE TRIGGER asset_insert AFTER INSERT ON assets FOR EACH ROW
+					BEGIN
+					   INSERT INTO assets_logs(action, time, asset_id) VALUES('INSERT',CURRENT_TIMESTAMP, NEW.id); 
+					END ;
+				   `);
+			res = await query(`
+					CREATE TRIGGER asset_update AFTER UPDATE ON assets FOR EACH ROW
+					BEGIN
+					   INSERT INTO assets_logs(action, time, asset_id) VALUES('UPDATE',CURRENT_TIMESTAMP, NEW.id); 
+					END ;
+				   `);
+			res = await query(`
+					CREATE TRIGGER asset_delete AFTER DELETE ON assets FOR EACH ROW
+					BEGIN
+					   INSERT INTO assets_logs(action, time, asset_id) VALUES('DELETE',CURRENT_TIMESTAMP, OLD.id); 
+					END ;
+				   `);
+				   
+			///////////////////////
+			res = await query(`
+					CREATE TRIGGER part_insert AFTER INSERT ON parts FOR EACH ROW
+					BEGIN
+					   INSERT INTO parts_logs(action, time, part_id) VALUES('INSERT',CURRENT_TIMESTAMP, NEW.id); 
+					END ;
+				   `);
+			res = await query(`
+					CREATE TRIGGER part_update AFTER UPDATE ON parts FOR EACH ROW
+					BEGIN
+					   INSERT INTO parts_logs(action, time, part_id) VALUES('UPDATE',CURRENT_TIMESTAMP, NEW.id); 
+					END ;
+				   `);
+			res = await query(`
+					CREATE TRIGGER part_delete AFTER DELETE ON parts FOR EACH ROW
+					BEGIN
+					   INSERT INTO parts_logs(action, time, part_id) VALUES('DELETE',CURRENT_TIMESTAMP, OLD.id); 
+					END ;
+				   `);
+			//////////////////////////
+			
 			res = await query("INSERT INTO roles VALUES(1,'Manager', 4294967295)");
 			res = await query("INSERT INTO roles VALUES(2,'Planner', 1785857)");
 			res = await query("INSERT INTO roles VALUES(3,'Electrician', 1785857)");
@@ -129,17 +192,17 @@ async function startDatabaseInit(){
 		res = await query("INSERT INTO assets SET name='fridge', make='unknown', model='2015', loc_id=1");
 		res = await query("INSERT INTO assets SET name='stove', make='ao', model='2017', loc_id=1");
 		res = await query("INSERT INTO assets SET name='building', make='NA', model='NA', loc_id=1");
-		res = await query("INSERT INTO work_orders_assets SET work_id=1, asset_id=1");
-		res = await query("INSERT INTO work_orders_assets SET work_id=1, asset_id=2");
+		res = await query("INSERT INTO work_orders_assets SET work_order_id=1, asset_id=1");
+		res = await query("INSERT INTO work_orders_assets SET work_order_id=1, asset_id=2");
 		res = await query("INSERT INTO work_orders(name, description, due_date, status, priority, work_type, loc_id) VALUES('fix AC', 'The AC stopped working', ?, 'pending', 3, 'corrective', 1)", [new Date(d)]);
-		res = await query("INSERT INTO work_orders_assets SET work_id=2, asset_id=3");
-		res = await query("INSERT INTO work_orders_assets SET work_id=2, asset_id=2");
-		res = await query("INSERT INTO work_assigned_users(work_id, user_id) VALUES(1, 1)");
-		res = await query("INSERT INTO work_assigned_users(work_id, user_id) VALUES(1, 2)");
+		res = await query("INSERT INTO work_orders_assets SET work_order_id=2, asset_id=3");
+		res = await query("INSERT INTO work_orders_assets SET work_order_id=2, asset_id=2");
+		res = await query("INSERT INTO work_assigned_users(work_order_id, user_id) VALUES(1, 1)");
+		res = await query("INSERT INTO work_assigned_users(work_order_id, user_id) VALUES(1, 2)");
 		res = await query("INSERT INTO teams(name, loc_id) VALUES('day shift', 1)");
 		res = await query("INSERT INTO team_users SET user_id=1, team_id=1");
-		res = await query("INSERT INTO work_assigned_teams(work_id, team_id) VALUES(1, 1)");
-		res = await query("INSERT INTO work_assigned_teams(work_id, team_id) VALUES(2, 1)");
+		res = await query("INSERT INTO work_assigned_teams(work_order_id, team_id) VALUES(1, 1)");
+		res = await query("INSERT INTO work_assigned_teams(work_order_id, team_id) VALUES(2, 1)");
 	}
 	await initDatabase();
 	console.log("done creating the tables");
@@ -159,6 +222,12 @@ app.use("/locations", locations);
 app.use("/work_orders", workOrders);
 app.use("/assets", assets);
 app.use("/parts", parts);
+
+//DATABASE ENTITY TYPES
+const ASSET_ID = 1;
+const PART_ID = 2;
+
+
 
 let authenticate = (req, res, next)=>{
 	if(sessions[req.cookies.auth] != undefined){
@@ -366,7 +435,7 @@ workOrders.get("/:id", async (req,res)=>{
 });
 workOrders.get("/:id/logs/", async (req,res)=>{
 	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
-		let results = await query("SELECT * FROM work_orders_logs WHERE work_id=?", [req.params.id]);
+		let results = await query("SELECT * FROM work_orders_logs WHERE work_order_id=?", [req.params.id]);
 		res.send(results);
 	}
 	else{
@@ -376,12 +445,12 @@ workOrders.get("/:id/logs/", async (req,res)=>{
 
 
 /* Non-join queries 
-"SELECT assets.* FROM assets, work_orders_assets WHERE work_id = ? AND assets.id = work_orders_assets.asset_id", [req.params.id]
-"SELECT parts.* FROM parts, work_orders_parts WHERE work_id = ? AND parts.id = work_orders_parts.part_id", [req.params.id]
+"SELECT assets.* FROM assets, work_orders_assets WHERE work_order_id = ? AND assets.id = work_orders_assets.asset_id", [req.params.id]
+"SELECT parts.* FROM parts, work_orders_parts WHERE work_order_id = ? AND parts.id = work_orders_parts.part_id", [req.params.id]
 */
 workOrders.get("/:id/assets", async (req,res)=>{
 	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
-		let results = await query("SELECT assets.* FROM assets INNER JOIN work_orders_assets ON(work_id = ? AND assets.id = work_orders_assets.asset_id)", [req.params.id]);
+		let results = await query("SELECT assets.* FROM assets INNER JOIN work_orders_assets ON(work_order_id = ? AND assets.id = work_orders_assets.asset_id)", [req.params.id]);
 		res.send(results);
 	}
 	else{
@@ -390,24 +459,24 @@ workOrders.get("/:id/assets", async (req,res)=>{
 });
 workOrders.get("/:id/parts", async (req,res)=>{
 	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
-		let results = await query("SELECT parts.* FROM parts INNER JOIN work_orders_parts ON(work_id = ? AND parts.id = work_orders_parts.part_id)", [req.params.id]);
+		let results = await query("SELECT parts.* FROM parts INNER JOIN work_orders_parts ON(parts.id = work_orders_parts.part_id) WHERE work_order_id = ?", [req.params.id]);
 		res.send(results);
 	}
 	else{
-		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(work_id = ? AND user_id=? AND user_id = users.id)", [req.params.id, sessions[req.cookies.auth].id]);
+		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(user_id = users.id) WHERE work_order_id = ? AND user_id=?", [req.params.id, sessions[req.cookies.auth].id]);
 		if(results.length){
-			results = await query("SELECT parts.* FROM parts INNER JOIN work_orders_parts ON(work_id = ? AND parts.id = work_orders_parts.part_id)", [req.params.id]);
+			results = await query("SELECT parts.* FROM parts INNER JOIN work_orders_parts ON(parts.id = work_orders_parts.part_id) WHERE work_order_id = ?", [req.params.id]);
 			res.send(results);
 		}
 	}
 });
 
 workOrders.get("/:id/users", async (req, res)=>{
-	let results = await query("SELECT users.name, users.image FROM work_assigned_users INNER JOIN users ON(work_id = ? AND users.id = user_id)", [req.params.id]);
+	let results = await query("SELECT users.name, users.image FROM work_assigned_users INNER JOIN users ON(users.id = user_id) WHERE work_order_id = ?", [req.params.id]);
 	res.send(results);
 });
 workOrders.get("/:id/teams", async (req, res)=>{
-	let results = await query("SELECT teams.name, teams.location FROM work_assigned_teams INNER JOIN teams ON(work_id = ? AND teams.id = team_id)", [req.params.id]);
+	let results = await query("SELECT teams.name, teams.location FROM work_assigned_teams INNER JOIN teams ON(teams.id = team_id) WHERE work_order_id = ?", [req.params.id]);
 	res.send(results);
 });
 workOrders.post("/", (req, res)=>{
@@ -488,11 +557,17 @@ assets.post("/", (req, res)=>{
 	});
 	
 });
-//newField = {field: "user manual", field_name:"", field_type: "string"};
-assets.post("/field", async (req, res)=>{
-	await query("INSERT INTO custom_assets_fields SET ?", [req.body.newField]);
+
+assets.post("/:id/custom_fields", async (req, res)=>{
+	let result = await query("INSERT INTO custom_fields(name, type) VALUES(?, ?)", [req.body.name, req.body.type]);
+	await query("INSERT INTO entity_custom_fields(entity_id, entity_type, custom_field_id) VALUES(?, ?, ?)",[req.params.id, ASSET_TYPE, result.insertId]);
 	res.send("done");
 });
+assets.patch("/:id/custom_fields/:custom_field_id", async (req, res)=>{
+	await query("UPDATE entity_custom_fields SET entity_id=?, entity_type=?, custom_field_id=?, value=?)",[req.params.id, ASSET_TYPE, result.insertId, req.body.value]);
+	res.send("done");
+});
+
 assets.put("/:id", validateEdit,(req, res)=>{
 	let q = sql.format("UPDATE assets SET ? WHERE id=?", [req.body.edit, req.params.id]);
 	con.query(q, (err, result)=>{
@@ -561,10 +636,12 @@ parts.post("/", (req, res)=>{
 	
 });
 // /parts/field, newField = {field: "user manual", field_name:"", field_type: "string"};
-parts.post("/field", async (req, res)=>{
+/*parts.post("/field", async (req, res)=>{
 	await query("INSERT INTO custom_parts_fields SET ?", [req.body.newField]);
 	res.send("done");
 });
+old logic. to be replaced...
+*/
 
 parts.put("/:id", validateEdit, (req, res)=>{
 	let q = sql.format("UPDATE parts SET ? WHERE id=?", [req.body.edit, req.params.id]);
