@@ -328,7 +328,8 @@ users.post("/login", async (req, res)=>{
 	if(results.length){
 		const accessToken = jwt.sign(results[0], accessTokenSecret, {expiresIn: "30m"});
 		const refreshToken = jwt.sign({id: results[0].id, username: results[0].username}, refreshTokenSecret, {expiresIn: "24h"});
-		//add refreshToken to database
+		//attach a random jti to refreshToken
+		
 		res.json({ accessToken, refreshToken, user: results[0] });
 	}
 	else{
@@ -343,16 +344,19 @@ users.post("/token", async (req, res)=>{
 		return;
 	}
 	
+	//add a jti to refresh tokens to store in database. 
 	//verify token is not in the database to continue
 	
 	jwt.verify(token, refreshTokenSecret, (err, user) => {
 		if(err){
 			return res.status(403).send("Invalid refresh token.");
 		}
+		
+		//fetch user data from the database using user.id to update accessToken
 		const accessToken = jwt.sign({id: user.id, username: user.username}, accessTokenSecret, {expiresIn:"30m"});
 		const refreshToken = jwt.sign({id: user.id, username: user.username}, refreshTokenSecret, {expiresIn:"24h"});
 		
-		//add token (old refreshToken to database) to block reusing it.
+		//add the jti token (old refreshToken) to database to block reusing it.
 		
 		res.json({ accessToken, refreshToken });
 	});
