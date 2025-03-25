@@ -6,6 +6,8 @@ const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const Joi = require("joi");
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
+require("dotenv").config();
 
 let app = express();
 let users = express.Router();
@@ -15,6 +17,8 @@ let workOrders = express.Router();
 let assets = express.Router();
 let parts = express.Router();
 
+
+//Database Connection
 let con = sql.createPool({
 	host: process.env.DB_HOST,
 	port: process.env.DB_PORT,
@@ -50,6 +54,8 @@ const permissions =
 	can_edit_assets: 20,
 	can_del_assets: 21
 };
+
+//Database query
 function query(q, vArr=[]){
 	return new Promise((resolve, rej)=>{
 		con.query(q, vArr, function(err, res){
@@ -58,6 +64,7 @@ function query(q, vArr=[]){
 		});
 	});
 }
+
 const salt = process.env.SCRYPT_SALT;
 function encr(p){
 	return new Promise( (res, rej)=>{
@@ -94,9 +101,9 @@ async function startDatabaseInit(){
 			//if(err){throw err;}
 			let res;
 			res = await query("CREATE TABLE locations (id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY(id))");
-			res = await query("CREATE TABLE work_orders(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, description VARCHAR(10000), image VARCHAR(255) NULL, due_date TIMESTAMP NULL, started_date TIMESTAMP NULL, drafted_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(), completed_date TIMESTAMP NULL, status VARCHAR(255) NULL, priority TINYINT NULL, work_type VARCHAR(50) NULL, PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE work_orders(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, description VARCHAR(10000), image VARCHAR(255) NULL, due_date TIMESTAMP NULL, started_date TIMESTAMP NULL, completed_date TIMESTAMP NULL, status VARCHAR(255) NULL, priority TINYINT NULL, work_type VARCHAR(50) NULL, PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
 			res = await query("CREATE TABLE assets(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, make VARCHAR(255) NULL, model VARCHAR(255) NULL, PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
-			res = await query("CREATE TABLE parts(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, code VARCHAR(255) NULL, price DOUBLE NULL, qty DOUBLE NULL, location VARCHAR(255), PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
+			res = await query("CREATE TABLE parts(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, qrcode VARCHAR(255) NULL, price DOUBLE NULL, qty DOUBLE NULL, location VARCHAR(255), PRIMARY KEY(id), loc_id INT UNSIGNED NOT NULL, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE)");
 			res = await query("CREATE TABLE teams(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(255) NOT NULL, loc_id INT UNSIGNED, FOREIGN KEY(loc_id) REFERENCES locations(id) ON DELETE CASCADE , PRIMARY KEY(id))");
 			res = await query("CREATE TABLE roles(id INT UNSIGNED AUTO_INCREMENT, name VARCHAR(100), PRIMARY KEY(id), permissions INT UNSIGNED)");
 			res = await query("CREATE TABLE users(id INT UNSIGNED AUTO_INCREMENT, role_id INT UNSIGNED, FOREIGN KEY(role_id) REFERENCES roles(id), username VARCHAR(255) NOT NULL, password CHAR(64) NOT NULL, name VARCHAR(255) NOT NULL, image VARCHAR(255) NULL, location VARCHAR(255), PRIMARY KEY(id), INDEX(username, password))");
@@ -109,7 +116,7 @@ async function startDatabaseInit(){
 			res = await query("CREATE TABLE work_orders_assets(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), work_order_id INT UNSIGNED, FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE, asset_id INT UNSIGNED, FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE)");
 			res = await query("CREATE TABLE work_orders_parts(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), work_order_id INT UNSIGNED, FOREIGN KEY(work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE, part_id INT UNSIGNED, FOREIGN KEY(part_id) REFERENCES parts(id) ON DELETE CASCADE)");
 			
-			res = await query("CREATE TABLE custom_fields(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL)");
+			res = await query("CREATE TABLE custom_fields(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), entity_type TINYINT, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL)");
 			res = await query("CREATE TABLE entity_custom_fields(entity_id INT UNSIGNED, entity_type TINYINT, custom_field_id INT UNSIGNED, value TEXT NULL, PRIMARY KEY(entity_id, entity_type, custom_field_id), FOREIGN KEY(custom_field_id) REFERENCES custom_fields(id) ON DELETE CASCADE)");
 			
 			res = await query(`
@@ -204,11 +211,12 @@ async function startDatabaseInit(){
 	await testData();
 	console.log("done filling the tables with test data");
 }
-//Make sure you have cmms schema created by running the query "CREATE DATABASE cmms;" in MySQL.
+//Make sure you have some schema (for example: cmms) created by running the query "CREATE DATABASE cmms;" in MySQL.
 //Then, execute the following line only once, and comment it afterwards.
 startDatabaseInit();
 
 //Middleware
+app.use(rateLimit({windowMs: 20 * 60 * 1000, max:700}));
 app.use(express.static("public"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -224,6 +232,18 @@ app.use("/parts", parts);
 const ASSET_TYPE = 1;
 const PART_TYPE = 2;
 
+
+//Database Allowed Columns (for sorting)
+workOrdersColumns = 
+["status","priority","work_type",
+"completed_date","started_date",
+"due_date","description","image", "name"];
+
+assetsColumns =
+["name", "make", "model", "image"];
+
+partsColumns =
+["name", "image", "qrcode", "price", "qty", "location"];
 
 
 let authenticate = (req, res, next)=>{
@@ -254,6 +274,14 @@ let pagination = (req, res, next)=>{
 	req.query.sort ??= "name";
 	next();
 };
+
+let isValidColumn = (column, allowedColumns) => {
+	if(allowedColumns.includes(column)){
+		return true;
+	}
+	return false;
+};
+
 http.createServer(app).listen(1337);
 
 app.get("/", (req, res)=>{
@@ -408,15 +436,20 @@ workOrders.get("/page/:n", pagination, (req,res)=>{
 		res.send("nop");
 		return;
 	}
-	let q;
+	let queryStr;
 	const offset = req.params.n;
-	if(req.query.desc == "1"){
-		q = sql.format("SELECT * FROM work_orders WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+	
+	if(typeof req.query.sort != "string" || !isValidColumn(req.query.sort.toLowerCase(), workOrdersColumns)){
+		req.query.sort = "name";
+	}
+	
+	if(typeof req.query?.sort_order == "string" && req.query.sort_order.toLowerCase() == "desc"){
+		queryStr = sql.format("SELECT * FROM work_orders WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
 	else{
-		q = sql.format("SELECT * FROM work_orders WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+		queryStr = sql.format("SELECT * FROM work_orders WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
-	con.query(q, (err, results)=>{
+	con.query(queryStr, (err, results)=>{
 		if(err){throw err;}
 		res.json(results);
 	});
@@ -529,15 +562,18 @@ assets.use((req, res, next)=>{
 });
 
 assets.get("/page/:n", pagination, (req,res)=>{
-	let q;
+	let queryStr;
 	const offset = req.params.n;
-	if(req.query.desc == "1"){
-		q = sql.format("SELECT * FROM assets WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+	if(typeof req.query.sort != "string" || !isValidColumn(req.query.sort.toLowerCase(), assetsColumns)){
+		req.query.sort = "name";
+	}
+	if(typeof req.query.sort_order == "string" && req.query.sort_order.toLowerCase() == "desc"){
+		queryStr = sql.format("SELECT * FROM assets WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
 	else{
-		q = sql.format("SELECT * FROM assets WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+		queryStr = sql.format("SELECT * FROM assets WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
-	con.query(q, (err, results)=>{
+	con.query(queryStr, (err, results)=>{
 		if(err){throw err;}
 		res.json(results);
 	});
@@ -555,20 +591,34 @@ assets.post("/", (req, res)=>{
 	
 });
 
-assets.post("/:id/custom_fields", async (req, res)=>{
-	let result = await query("INSERT INTO custom_fields(name, type) VALUES(?, ?)", [req.body.name, req.body.type]);
-	await query("INSERT INTO entity_custom_fields(entity_id, entity_type, custom_field_id) VALUES(?, ?, ?)",[req.params.id, ASSET_TYPE, result.insertId]);
+assets.get("custom_fields", async (req, res)=>{
+	let result = await query("SELECT id, name, type FROM custom_fields WHERE entity_type = ?", [ASSET_TYPE]);
+});
+assets.post("/custom_fields", async (req, res)=>{	
+	if(typeof req.body.name != "string" || typeof req.body.type != "string"){
+		res.send("error");
+		return;
+	}
+	
+	let result = await query("INSERT INTO custom_fields(name, type, entity_type) VALUES(?, ?, ?)", [req.body.name, req.body.type, ASSET_TYPE]);
 	res.send("done");
 });
-assets.patch("/:id/custom_fields/:custom_field_id", async (req, res)=>{
-	await query("UPDATE entity_custom_fields SET entity_id=?, entity_type=?, custom_field_id=?, value=?)",[req.params.id, ASSET_TYPE, result.insertId, req.body.value]);
+assets.post("/:id/custom_fields/:custom_field_id", async (req, res)=>{
+	await query("INSERT INTO entity_custom_fields SET entity_id=?, entity_type=?, custom_field_id=?, value=?",[req.params.id, ASSET_TYPE, req.params.custom_field_id, req.body.value]);
 	res.send("done");
 });
 
-assets.put("/:id", validateEdit,(req, res)=>{
-	let q = sql.format("UPDATE assets SET ? WHERE id=?", [req.body.edit, req.params.id]);
+assets.patch("/:id",(req, res)=>{
+	if(!isValidColumn(req.body.field, assetsColumns)){
+		res.send("error");
+		return;
+	}
+	let q = sql.format("UPDATE assets SET ?? = ? WHERE id=?", [req.body.field, req.body.value, req.params.id]);
 	con.query(q, (err, result)=>{
-		if(err){throw err;}
+		if(err){
+			res.send("error");
+			return;
+		}
 		res.send("done");
 	});
 });
@@ -607,15 +657,18 @@ parts.use((req, res, next)=>{
 });
 
 parts.get("/page/:n", pagination, (req,res)=>{
-	let q;
+	let queryStr;
 	const offset = req.params.n;
-	if(req.query.desc == "1"){
-		q = sql.format("SELECT * FROM parts WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+	if(typeof req.query.sort != "string" || !isValidColumn(req.query.sort.toLowerCase(), partsColumns)){
+		req.query.sort = "name";
+	}
+	if(typeof req.query.sort_order == "string" && req.query.sort_order.toLowerCase() == "desc"){
+		queryStr = sql.format("SELECT * FROM parts WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
 	else{
-		q = sql.format("SELECT * FROM parts WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+		queryStr = sql.format("SELECT * FROM parts WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
 	}
-	con.query(q, (err, results)=>{
+	con.query(queryStr, (err, results)=>{
 		if(err){throw err;}
 		res.json(results);
 	});
@@ -632,18 +685,35 @@ parts.post("/", (req, res)=>{
 	});
 	
 });
-// /parts/field, newField = {field: "user manual", field_name:"", field_type: "string"};
-/*parts.post("/field", async (req, res)=>{
-	await query("INSERT INTO custom_parts_fields SET ?", [req.body.newField]);
+
+parts.get("custom_fields", async (req, res)=>{
+	let result = await query("SELECT id, name, type FROM custom_fields WHERE entity_type = ?", [PART_TYPE]);
+});
+parts.post("/custom_fields", async (req, res)=>{	
+	if(typeof req.body.name != "string" || typeof req.body.type != "string"){
+		res.send("error");
+		return;
+	}
+	
+	let result = await query("INSERT INTO custom_fields(name, type, entity_type) VALUES(?, ?, ?)", [req.body.name, req.body.type, PART_TYPE]);
 	res.send("done");
 });
-old logic. to be replaced...
-*/
+parts.post("/:id/custom_fields/:custom_field_id", async (req, res)=>{
+	await query("INSERT INTO entity_custom_fields SET entity_id=?, entity_type=?, custom_field_id=?, value=?",[req.params.id, PART_TYPE, req.params.custom_field_id, req.body.value]);
+	res.send("done");
+});
 
-parts.put("/:id", validateEdit, (req, res)=>{
-	let q = sql.format("UPDATE parts SET ? WHERE id=?", [req.body.edit, req.params.id]);
+parts.patch("/:id",(req, res)=>{
+	if(!isValidColumn(req.body.field, partsColumns)){
+		res.send("error");
+		return;
+	}
+	let q = sql.format("UPDATE parts SET ?? = ? WHERE id=?", [req.body.field, req.body.value, req.params.id]);
 	con.query(q, (err, result)=>{
-		if(err){throw err;}
+		if(err){
+			res.send("error");
+			return;
+		}
 		res.send("done");
 	});
 });
