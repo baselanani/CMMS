@@ -344,13 +344,12 @@ users.post("/token", async (req, res)=>{
 		return;
 	}
 	
-	//add a jti to refresh tokens to store in database. 
-	//verify token is not in the database to continue
 	
 	jwt.verify(token, refreshTokenSecret, (err, user) => {
 		if(err){
 			return res.status(403).send("Invalid refresh token.");
 		}
+		//verify token is not in the database (using jti) to continue
 		
 		//fetch user data from the database using user.id to update accessToken
 		const accessToken = jwt.sign({id: user.id, username: user.username}, accessTokenSecret, {expiresIn:"30m"});
