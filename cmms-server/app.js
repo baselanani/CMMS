@@ -221,6 +221,8 @@ app.use(express.static("public"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+//Routes
 app.use("/users", users);
 app.use("/teams", teams);
 app.use("/locations", locations);
