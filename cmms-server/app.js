@@ -234,15 +234,15 @@ const PART_TYPE = 2;
 
 
 //Database Allowed Columns (for sorting)
-workOrdersColumns = 
+const workOrdersColumns = 
 ["status","priority","work_type",
 "completed_date","started_date",
 "due_date","description","image", "name"];
 
-assetsColumns =
+const assetsColumns =
 ["name", "make", "model", "image"];
 
-partsColumns =
+const partsColumns =
 ["name", "image", "qrcode", "price", "qty", "location"];
 
 
