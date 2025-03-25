@@ -249,12 +249,19 @@ const partsColumns =
 
 
 let authenticate = (req, res, next)=>{
-	if(sessions[req.cookies.auth] != undefined){
+	const authHeader = req.headers["authorization"];
+	const token = authHeader && authHeader.split(" ")[1];
+	if(token == null){
+		return res.status(401).send("Token is required.");
+	}
+	
+	jwt.verify(token,accessTokenSecret, (err, user)=>{
+		if(err){
+			return res.status(403).send("Invalid token.");
+		}
+		req.user = user;
 		next();
-	}
-	else{
-		req.client.destroy();
-	}
+	});
 };
 //electrician, technician, mechanic, planner, manager
 
@@ -293,6 +300,10 @@ app.get("/", (req, res)=>{
 //------------------------
 /*Start of: /users endpoint*/
 //------------------------
+
+const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
+const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
+
 users.post("/register", async (req, res)=>{
 	if(req.body.password != undefined && req.body.username != undefined && req.body.name != undefined){
 		let results = await query("SELECT username FROM users WHERE username = ?", [req.body.username]);
@@ -310,19 +321,41 @@ users.post("/register", async (req, res)=>{
 });
 users.post("/login", async (req, res)=>{
 	if(req.body.username == undefined || req.body.password == undefined){
-		req.client.destroy();
+		res.send("error");
 		return;
 	}
 	let results = await query("SELECT users.id, users.name, username, image, location, permissions FROM users INNER JOIN roles ON(role_id = roles.id) WHERE username=? AND password = ?",[req.body.username, await encr(req.body.password)]);
 	if(results.length){
-		let id = await genId();
-		res.cookie("auth", id, {sameSite:"Lax"}); 
-		sessions[id] = {info: results[0]};
-		res.json(results[0]);
+		const accessToken = jwt.sign(results[0], accessTokenSecret, {expiresIn: "30m"});
+		const refreshToken = jwt.sign({id: results[0].id, username: results[0].username}, refreshTokenSecret, {expiresIn: "24h"});
+		//add refreshToken to database
+		res.json({ accessToken, refreshToken, user: results[0] });
 	}
 	else{
 		res.send("error");
 	}
+});
+
+users.post("/token", async (req, res)=>{
+	const { token } = req.body;
+	if(!token){
+		res.status(401).send("Refresh token is required!");
+		return;
+	}
+	
+	//verify token is not in the database to continue
+	
+	jwt.verify(token, refreshTokenSecret, (err, user) => {
+		if(err){
+			return res.status(403).send("Invalid refresh token.");
+		}
+		const accessToken = jwt.sign({id: user.id, username: user.username}, accessTokenSecret, {expiresIn:"30m"});
+		const refreshToken = jwt.sign({id: user.id, username: user.username}, refreshTokenSecret, {expiresIn:"24h"});
+		
+		//add token (old refreshToken to database) to block reusing it.
+		
+		res.json({ accessToken, refreshToken });
+	});
 });
 //------------------------
 /*End of: /users endpoint*/
