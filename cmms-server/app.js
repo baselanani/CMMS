@@ -119,6 +119,8 @@ async function startDatabaseInit(){
 			res = await query("CREATE TABLE custom_fields(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), entity_type TINYINT, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL)");
 			res = await query("CREATE TABLE entity_custom_fields(entity_id INT UNSIGNED, entity_type TINYINT, custom_field_id INT UNSIGNED, value TEXT NULL, PRIMARY KEY(entity_id, entity_type, custom_field_id), FOREIGN KEY(custom_field_id) REFERENCES custom_fields(id) ON DELETE CASCADE)");
 			
+			res = await query("CREATE TABLE token_store(jit VARCHAR(36) NOT NULL, PRIMARY KEY(jit), blocked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+			
 			res = await query(`
 					CREATE TRIGGER work_order_insert AFTER INSERT ON work_orders FOR EACH ROW
 					BEGIN
@@ -285,10 +287,7 @@ let pagination = (req, res, next)=>{
 };
 
 let isValidColumn = (column, allowedColumns) => {
-	if(allowedColumns.includes(column)){
-		return true;
-	}
-	return false;
+	return allowedColumns.includes(column);
 };
 
 http.createServer(app).listen(1337);
