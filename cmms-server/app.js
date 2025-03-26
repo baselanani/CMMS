@@ -119,7 +119,7 @@ async function startDatabaseInit(){
 			res = await query("CREATE TABLE custom_fields(id INT UNSIGNED AUTO_INCREMENT, PRIMARY KEY(id), entity_type TINYINT, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL)");
 			res = await query("CREATE TABLE entity_custom_fields(entity_id INT UNSIGNED, entity_type TINYINT, custom_field_id INT UNSIGNED, value TEXT NULL, PRIMARY KEY(entity_id, entity_type, custom_field_id), FOREIGN KEY(custom_field_id) REFERENCES custom_fields(id) ON DELETE CASCADE)");
 			
-			res = await query("CREATE TABLE token_store(jit VARCHAR(36) NOT NULL, PRIMARY KEY(jit), blocked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+			res = await query("CREATE TABLE token_store(jti VARCHAR(36) NOT NULL, PRIMARY KEY(jit), blocked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 			
 			res = await query(`
 					CREATE TRIGGER work_order_insert AFTER INSERT ON work_orders FOR EACH ROW
@@ -326,8 +326,7 @@ users.post("/login", async (req, res)=>{
 	let results = await query("SELECT users.id, users.name, username, image, location, permissions FROM users INNER JOIN roles ON(role_id = roles.id) WHERE username=? AND password = ?",[req.body.username, await encr(req.body.password)]);
 	if(results.length){
 		const accessToken = jwt.sign(results[0], accessTokenSecret, {expiresIn: "30m"});
-		const refreshToken = jwt.sign({id: results[0].id, username: results[0].username}, refreshTokenSecret, {expiresIn: "24h"});
-		//attach a random jti to refreshToken
+		const refreshToken = jwt.sign({id: results[0].id, username: results[0].username, jit: crypto.randomUUID()}, refreshTokenSecret, {expiresIn: "24h"});
 		
 		res.json({ accessToken, refreshToken, user: results[0] });
 	}
@@ -348,6 +347,7 @@ users.post("/token", async (req, res)=>{
 		if(err){
 			return res.status(403).send("Invalid refresh token.");
 		}
+		await query("SELECT * FROM token_store WHERE jit ");
 		//verify token is not in the database (using jti) to continue
 		
 		//fetch user data from the database using user.id to update accessToken
