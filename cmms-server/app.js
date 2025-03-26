@@ -27,7 +27,6 @@ let con = sql.createPool({
 	database: process.env.DB_DATABASE
 });
 
-const sessions = {};
 const strOfChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 const permissions =
 {
