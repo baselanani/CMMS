@@ -237,7 +237,13 @@ const ASSET_TYPE = 1;
 const PART_TYPE = 2;
 
 
-//Database Allowed Columns (for sorting)
+//Database Allowed Columns
+const locationsColumns =
+["name"];
+
+const teamsColumns =
+["name", "loc_id"];
+
 const workOrdersColumns = 
 ["status","priority","work_type",
 "completed_date","started_date",
@@ -264,15 +270,6 @@ let authenticate = (req, res, next)=>{
 		req.user = user;
 		next();
 	});
-};
-//electrician, technician, mechanic, planner, manager
-
-let validateEdit = (req, res, next) =>{
-	if(typeof req.body.edit != "object" || req.body.edit.id != undefined){
-		req.client.destroy();
-		return;
-	}
-	next();
 };
 
 let pagination = (req, res, next)=>{
@@ -326,7 +323,7 @@ users.post("/login", async (req, res)=>{
 	let results = await query("SELECT users.id, users.name, username, image, location, permissions FROM users INNER JOIN roles ON(role_id = roles.id) WHERE username=? AND password = ?",[req.body.username, await encr(req.body.password)]);
 	if(results.length){
 		const accessToken = jwt.sign(results[0], accessTokenSecret, {expiresIn: "30m"});
-		const refreshToken = jwt.sign({id: results[0].id, username: results[0].username, jit: crypto.randomUUID()}, refreshTokenSecret, {expiresIn: "24h"});
+		const refreshToken = jwt.sign({id: results[0].id, username: results[0].username, jti: crypto.randomUUID()}, refreshTokenSecret, {expiresIn: "24h"});
 		
 		res.json({ accessToken, refreshToken, user: results[0] });
 	}
@@ -347,14 +344,24 @@ users.post("/token", async (req, res)=>{
 		if(err){
 			return res.status(403).send("Invalid refresh token.");
 		}
-		await query("SELECT * FROM token_store WHERE jit ");
-		//verify token is not in the database (using jti) to continue
 		
-		//fetch user data from the database using user.id to update accessToken
-		const accessToken = jwt.sign({id: user.id, username: user.username}, accessTokenSecret, {expiresIn:"30m"});
-		const refreshToken = jwt.sign({id: user.id, username: user.username}, refreshTokenSecret, {expiresIn:"24h"});
+		//verify token is not used before
+		let results = await query("SELECT * FROM token_store WHERE jti = ? ", [user.jti]);
+		if(results.length > 0){
+			return res.status(403).send("Invalid refresh token.");
+		}
 		
-		//add the jti token (old refreshToken) to database to block reusing it.
+		//fetch user data from the database to update accessToken
+		results = await query("SELECT users.id, users.name, username, image, location, permissions FROM users INNER JOIN roles ON(role_id = roles.id) WHERE id = ?", [user.id]);
+		if(results.length == 0){
+			return res.status(403).send("internal error");
+		}
+		
+		const accessToken = jwt.sign(results[0], accessTokenSecret, {expiresIn:"30m"});
+		const refreshToken = jwt.sign({id: user.id, username: user.username, jti: crypto.randomUUID()}, refreshTokenSecret, {expiresIn:"24h"});
+		
+		//add old refreshToken to database to block reusing it.
+		await query("INSERT INTO token_store SET jti = ? ", [user.jti]);
 		
 		res.json({ accessToken, refreshToken });
 	});
@@ -370,35 +377,48 @@ teams.use(authenticate);
 
 teams.get("/page/:n", pagination, async (req, res)=>{
 	const offset = req.params.n;
-	let results = await query("SELECT id, name FROM teams WHERE loc_id = ? ORDER BY ?? LIMIT ?,25", [req.query.loc_id, req.query.sort, offset]);
-	results==undefined?res.send("error"):res.json(results);
+	let queryStr;
+	
+	if(typeof req.query.sort != "string" || !isValidColumn(req.query.sort.toLowerCase(), teamsColumns)){
+		req.query.sort = "name";
+	}
+	
+	if(typeof req.query?.sort_order == "string" && req.query.sort_order.toLowerCase() == "desc"){
+		queryStr = sql.format("SELECT id, name FROM teams WHERE loc_id = ? ORDER BY ?? DESC LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+	}
+	else{
+		queryStr = sql.format("SELECT id, name FROM teams WHERE loc_id = ? ORDER BY ?? LIMIT ?, 25", [req.query.loc_id,req.query.sort, offset]);
+	}
+	con.query(queryStr, (err, results)=>{
+		if(err){
+			res.send("error");
+		}
+		res.json(results);
+	});
 });
 teams.post("/", async (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_create_teams)){
-		res.send("nop");
+	if(!hasPermission(req.user.permissions, permissions.can_create_teams)){
+		res.status(403).send("unauthorized");
 		return;
 	}
 	let results = await query("INSERT INTO teams(name, loc_id) VALUES(?, ?)", [req.body.name, req.body.loc_id]);
 	results==undefined?res.send("error"):res.send("done");
 });
-//edit = {name: "new name", location:"new location"}
-teams.put("/:id", validateEdit, async (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_edit_teams)){
-		res.send("nop");
+
+teams.put("/:id", async (req, res)=>{
+	if(!hasPermission(req.user.permissions, permissions.can_edit_teams)){
+		res.status(403).send("unauthorized");
 		return;
 	}
-	let results = await query("UPDATE teams SET ? WHERE id=?", [req.body.edit, req.params.id]);
+	let results = await query("UPDATE teams SET name=?, loc_id=? WHERE id=?", [req.body.name, req.body.loc_Id, req.params.id]);
 	results==undefined?res.send("error"):res.send("done");
 });
 teams.delete("/:id", (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_del_teams)){
-		res.send("nop");
+	if(!hasPermission(req.user.permissions, permissions.can_del_teams)){
+		res.status(403).send("unauthorized");
 		return;
 	}
-	if(req.params.id == undefined){
-		req.client.destroy();
-		return;
-	}
+	
 	con.query(sql.format("DELETE FROM teams WHERE id=?"), [req.params.id], (err, results)=>{
 					if(err){
 						res.send("error");
@@ -416,42 +436,46 @@ teams.delete("/:id", (req, res)=>{
 locations.use(authenticate);
 
 locations.get("/", (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_locations)){
-		res.send("nop");
+	if(!hasPermission(req.user.permissions, permissions.can_view_all_locations)){
+		res.status(403).send("unauthorized");
 		return;
 	}
-	con.query(sql.format("SELECT * FROM cmms.locations"), (err, results)=>{
-					if(err){throw err;}
+	con.query(sql.format("SELECT * FROM locations"), (err, results)=>{
+					if(err){
+						res.send("error");
+						return;
+					}
 					res.json(results);
 	});
 });
 locations.post("/", (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_add_locations)){
-		res.send("nop");
+	if(!hasPermission(req.user.permissions, permissions.can_add_locations)){
+		res.status(403).send("unauthorized");
 		return;
 	}
-	let ctr = 0;
-	const numOfTables = 2;
 	con.query("INSERT INTO locations(name) VALUES(?)", [req.body.name],(err, results)=>{
-			if(err){throw err;}
+			if(err){
+				res.send("error");
+				return;
+			}
 			res.send("done");
 	});
 });
-locations.put("/:id", validateEdit, async (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_edit_locations)){
-		res.send("nop");
+locations.put("/:id", async (req, res)=>{
+	if(!hasPermission(req.user.permissions, permissions.can_edit_locations)){
+		res.status(403).send("unauthorized");
 		return;
 	}
-	let results = await query("UPDATE locations SET ? WHERE id=?", [req.body.edit, req.params.id]);
+	let results = await query("UPDATE locations SET name=? WHERE id=?", [req.body.newName, req.params.id]);
 	results==undefined?res.send("error"):res.json(results);
 });
 locations.delete("/:id", (req, res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_del_locations)){
-		res.send("nop");
+	if(!hasPermission(req.user.permissions, permissions.can_del_locations)){
+		res.status(403).send("unauthorized");
 		return;
 	}
-	if(req.params.id == undefined){
-		req.client.destroy();
+	if(typeof req.params.id != "number"){
+		res.status(403).send("invalid id");
 		return;
 	}
 	con.query(sql.format("DELETE FROM locations WHERE id=?"), [req.params.id], (err, results)=>{
@@ -469,7 +493,7 @@ locations.delete("/:id", (req, res)=>{
 workOrders.use(authenticate);
 
 workOrders.get("/page/:n", pagination, (req,res)=>{
-	if(!hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
+	if(!hasPermission(req.user.permissions, permissions.can_view_all_work_orders)){
 		res.send("nop");
 		return;
 	}
@@ -492,48 +516,71 @@ workOrders.get("/page/:n", pagination, (req,res)=>{
 	});
 });
 workOrders.get("/:id", async (req,res)=>{
-	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
+	if(hasPermission(req.user.permissions, permissions.can_view_all_work_orders)){
 		let results = await query("SELECT * FROM work_orders WHERE id=?", [req.params.id]);
 		res.send(results);
 	}
 	else{
 		//check if work order is assigned to user
+		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(user_id = users.id) WHERE work_order_id = ? AND user_id=?", [req.params.id, req.user.id]);
+		if(results.length){
+			results = await query("SELECT * FROM work_orders WHERE id=?", [req.params.id]);
+			res.send(results);
+		}
+		else{
+			res.status(403).send("Unauthorized access.");
+		}
 	}
 });
 workOrders.get("/:id/logs/", async (req,res)=>{
-	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
+	if(hasPermission(req.user.permissions, permissions.can_view_all_work_orders)){
 		let results = await query("SELECT * FROM work_orders_logs WHERE work_order_id=?", [req.params.id]);
 		res.send(results);
 	}
 	else{
 		//check if work order is assigned to user
+		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(user_id = users.id) WHERE work_order_id = ? AND user_id=?", [req.params.id, req.user.id]);
+		if(results.length){
+			results = await query("SELECT * FROM work_orders_logs WHERE work_order_id=?", [req.params.id]);
+			res.send(results);
+		}
+		else{
+			res.status(403).send("Unauthorized access.");
+		}
 	}
 });
 
 
-/* Non-join queries 
-"SELECT assets.* FROM assets, work_orders_assets WHERE work_order_id = ? AND assets.id = work_orders_assets.asset_id", [req.params.id]
-"SELECT parts.* FROM parts, work_orders_parts WHERE work_order_id = ? AND parts.id = work_orders_parts.part_id", [req.params.id]
-*/
 workOrders.get("/:id/assets", async (req,res)=>{
-	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
-		let results = await query("SELECT assets.* FROM assets INNER JOIN work_orders_assets ON(work_order_id = ? AND assets.id = work_orders_assets.asset_id)", [req.params.id]);
+	if(hasPermission(req.user.permissions, permissions.can_view_all_work_orders)){
+		let results = await query("SELECT assets.* FROM assets INNER JOIN work_orders_assets ON(assets.id = work_orders_assets.asset_id) WHERE work_order_id = ?", [req.params.id]);
 		res.send(results);
 	}
 	else{
 		//check if work order is assigned to user
+		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(user_id = users.id) WHERE work_order_id = ? AND user_id=?", [req.params.id, req.user.id]);
+		if(results.length){
+			results = await query("SELECT assets.* FROM assets INNER JOIN work_orders_assets ON(assets.id = work_orders_assets.asset_id) WHERE work_order_id = ?", [req.params.id]);
+			res.send(results);
+		}
+		else{
+			res.status(403).send("Unauthorized access.");
+		}
 	}
 });
 workOrders.get("/:id/parts", async (req,res)=>{
-	if(hasPermission(sessions[req.cookies.auth].info.permissions, permissions.can_view_all_work_orders)){
+	if(hasPermission(req.user.permissions, permissions.can_view_all_work_orders)){
 		let results = await query("SELECT parts.* FROM parts INNER JOIN work_orders_parts ON(parts.id = work_orders_parts.part_id) WHERE work_order_id = ?", [req.params.id]);
 		res.send(results);
 	}
 	else{
-		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(user_id = users.id) WHERE work_order_id = ? AND user_id=?", [req.params.id, sessions[req.cookies.auth].id]);
+		let results = await query("SELECT users.id FROM work_assigned_users INNER JOIN users ON(user_id = users.id) WHERE work_order_id = ? AND user_id=?", [req.params.id, req.user.id]);
 		if(results.length){
 			results = await query("SELECT parts.* FROM parts INNER JOIN work_orders_parts ON(parts.id = work_orders_parts.part_id) WHERE work_order_id = ?", [req.params.id]);
 			res.send(results);
+		}
+		else{
+			res.status(403).send("Unauthorized access.");
 		}
 	}
 });
